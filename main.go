@@ -3,57 +3,34 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/gobwas/glob"
 	"github.com/loveleshsharma/gohive"
+	globber "github.com/mattn/go-zglob"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"sync"
 )
 
 var files []string
 var count int
 var (
-	rec bool
-	g   glob.Glob
+	exeName     string = "lncount"
+	filePattern string
 )
 
 func collectFiles() {
-	if !rec {
-		fs, err := ioutil.ReadDir("./")
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		for _, f := range fs {
-			if !f.IsDir() {
-				if g.Match(f.Name()) {
-					files = append(files, f.Name())
-				}
-			}
-		}
-		return
-	}
-
-	err := filepath.Walk("./", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			if g.Match(info.Name()) {
-				files = append(files, path)
-			}
-		}
-		return nil
-	})
+	var err error
+	files, err = globber.Glob(filePattern)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 }
 
 var mux sync.Mutex
+
+var liner = regexp.MustCompile(`[\n|\r]`)
 
 func countLines(name string) {
 	data, err := ioutil.ReadFile(name)
@@ -61,38 +38,43 @@ func countLines(name string) {
 		fmt.Fprintf(os.Stderr, "error opening file: %s\n", err)
 		os.Exit(1)
 	}
-	cnt := strings.Count(string(data), "\n")
-	if cnt == 0 {
-		cnt += strings.Count(string(data), "\r\n")
-	}
-	if cnt == 0 {
-		cnt += strings.Count(string(data), "\r")
-	}
+	matches := liner.FindAllIndex(data, -1)
 	mux.Lock()
-	count += cnt
+	count += len(matches)
 	mux.Unlock()
 }
 
+func helpMsg() {
+	fmt.Fprintf(os.Stderr, "usage: %s <filename pattern>\n"+
+		"supports glob patterns\n",
+		exeName)
+}
+
 func main() {
-	flag.BoolVar(&rec, "r", false, "recursively search all files and subfolders")
+	help := flag.Bool("h", false, "display help")
+	help2 := flag.Bool("help", false, "display help")
 	flag.Parse()
+	exeName = filepath.Base(os.Args[0])
+	if *help || *help2 {
+		helpMsg()
+		return
+	}
 	args := flag.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "missing argument: pattern")
+		helpMsg()
 		return
 	}
 	if len(args) != 1 {
 		fmt.Fprintln(os.Stderr, "too many arguments")
 		return
 	}
-	pattern := args[0]
-	g = glob.MustCompile(pattern)
+	filePattern = args[0]
 	collectFiles()
 	if len(files) == 0 {
-		fmt.Fprintf(os.Stderr, "no files found matching %s\n", pattern)
+		fmt.Fprintf(os.Stderr, "no files found matching %s\n", filePattern)
 		return
 	}
-	hive := gohive.NewFixedSizePool(5)
+	hive := gohive.NewFixedSizePool(10)
 	var wg sync.WaitGroup
 	for _, f := range files {
 		exe := func() {
@@ -103,5 +85,10 @@ func main() {
 		hive.Submit(exe)
 	}
 	wg.Wait()
-	fmt.Printf("%d lines\n", count)
+	msg:= fmt.Sprintf("%d lines in %d file", count, len(files))
+	if len(files)> 1{
+		msg+= "s"
+	}
+	fmt.Println(msg)
+	
 }
