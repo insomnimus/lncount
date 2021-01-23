@@ -28,7 +28,7 @@ func collectFiles() {
 
 var liner = regexp.MustCompile(`[\n|\r]`)
 
-func countLines(name string) int{
+func countLines(name string) int {
 	data, err := ioutil.ReadFile(name)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening file: %s\n", err)
@@ -67,30 +67,33 @@ func main() {
 		fmt.Fprintf(os.Stderr, "no files found matching %s\n", filePattern)
 		return
 	}
-	numberJobs:= len(files)
-	jobs:= make(chan string, numberJobs)
-	results:= make(chan int, numberJobs)
-	    for w := 1; w <= 5; w++ {
-        go worker(jobs, results)
-    }
-	for _, j:= range files{
-		jobs<-j
+	numberJobs := len(files)
+	jobs := make(chan string, numberJobs)
+	results := make(chan int, numberJobs)
+	workerN := 10
+	if workerN > len(files) {
+		workerN = len(files)
+	}
+	for i := 0; i <= workerN; i++ {
+		go worker(jobs, results)
+	}
+	for _, j := range files {
+		jobs <- j
 	}
 	close(jobs)
-	    for a := 1; a <= numberJobs; a++ {
-        count+= <-results
-    }
-	
-	msg:= fmt.Sprintf("%d lines in %d file", count, len(files))
-	if len(files)> 1{
-		msg+= "s"
+	for a := 1; a <= numberJobs; a++ {
+		count += <-results
+	}
+
+	msg := fmt.Sprintf("%d lines in %d file", count, len(files))
+	if len(files) > 1 {
+		msg += "s"
 	}
 	fmt.Println(msg)
-	
 }
 
 func worker(jobs <-chan string, results chan<- int) {
-	for j:= range jobs{
+	for j := range jobs {
 		results <- countLines(j)
 	}
 }
