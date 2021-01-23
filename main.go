@@ -3,13 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/loveleshsharma/gohive"
 	globber "github.com/mattn/go-zglob"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sync"
 )
 
 var files []string
@@ -28,20 +26,15 @@ func collectFiles() {
 	}
 }
 
-var mux sync.Mutex
-
 var liner = regexp.MustCompile(`[\n|\r]`)
 
-func countLines(name string) {
+func countLines(name string) int{
 	data, err := ioutil.ReadFile(name)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening file: %s\n", err)
 		os.Exit(1)
 	}
-	matches := liner.FindAllIndex(data, -1)
-	mux.Lock()
-	count += len(matches)
-	mux.Unlock()
+	return len(liner.FindAllIndex(data, -1))
 }
 
 func helpMsg() {
@@ -74,21 +67,30 @@ func main() {
 		fmt.Fprintf(os.Stderr, "no files found matching %s\n", filePattern)
 		return
 	}
-	hive := gohive.NewFixedSizePool(10)
-	var wg sync.WaitGroup
-	for _, f := range files {
-		exe := func() {
-			defer wg.Done()
-			countLines(f)
-		}
-		wg.Add(1)
-		hive.Submit(exe)
+	numberJobs:= len(files)
+	jobs:= make(chan string, numberJobs)
+	results:= make(chan int, numberJobs)
+	    for w := 1; w <= 5; w++ {
+        go worker(jobs, results)
+    }
+	for _, j:= range files{
+		jobs<-j
 	}
-	wg.Wait()
+	close(jobs)
+	    for a := 1; a <= numberJobs; a++ {
+        count+= <-results
+    }
+	
 	msg:= fmt.Sprintf("%d lines in %d file", count, len(files))
 	if len(files)> 1{
 		msg+= "s"
 	}
 	fmt.Println(msg)
 	
+}
+
+func worker(jobs <-chan string, results chan<- int) {
+	for j:= range jobs{
+		results <- countLines(j)
+	}
 }
