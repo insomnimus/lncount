@@ -31,8 +31,7 @@ var liner = regexp.MustCompile(`[\n|\r]`)
 func countLines(name string) int {
 	data, err := ioutil.ReadFile(name)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file: %s\n", err)
-		os.Exit(1)
+		return 0
 	}
 	return len(liner.FindAllIndex(data, -1))
 }
