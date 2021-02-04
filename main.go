@@ -24,12 +24,12 @@ func collectFiles() {
 	if runtime.GOOS != "windows" {
 		return
 	}
-	var err error
-	files, err = globber.Glob(filePattern)
-	if err != nil {
+	tempFiles, err := globber.Glob(filePattern)
+	if err != nil && len(files) == 0 {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
+	files = append(files, tempFiles...)
 }
 
 func countLines(name string) int {
