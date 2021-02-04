@@ -3,11 +3,12 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"flag"
 	"fmt"
 	globber "github.com/mattn/go-zglob"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 )
 
 var files []string
@@ -18,6 +19,11 @@ var (
 )
 
 func collectFiles() {
+	// assume bash is the default shell for all
+	// bash can expand the filenames itself so return
+	if runtime.GOOS != "windows" {
+		return
+	}
 	var err error
 	files, err = globber.Glob(filePattern)
 	if err != nil {
@@ -72,24 +78,30 @@ func main() {
 			return
 		}
 	}
-	help := flag.Bool("h", false, "display help")
-	help2 := flag.Bool("help", false, "display help")
-	flag.Parse()
+
 	exeName = filepath.Base(os.Args[0])
-	if *help || *help2 {
+	if len(os.Args) == 1 {
 		helpMsg()
 		return
 	}
-	args := flag.Args()
-	if len(args) == 0 {
-		helpMsg()
-		return
+
+LOOP:
+	for _, arg := range os.Args[1:] {
+		if arg == "-h" || arg == "--help" {
+			helpMsg()
+			return
+		}
+		switch runtime.GOOS {
+		case "windows":
+			if strings.Contains(arg, "*") {
+				filePattern = arg
+				continue LOOP
+			}
+			files = append(files, arg)
+		default:
+			files = append(files, arg)
+		}
 	}
-	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "too many arguments")
-		return
-	}
-	filePattern = args[0]
 	collectFiles()
 	if len(files) == 0 {
 		fmt.Fprintf(os.Stderr, "no files found matching %s\n", filePattern)
