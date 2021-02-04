@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	globber "github.com/mattn/go-zglob"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 )
 
 var files []string
@@ -26,23 +26,52 @@ func collectFiles() {
 	}
 }
 
-var liner = regexp.MustCompile(`[\n|\r]`)
-
 func countLines(name string) int {
-	data, err := ioutil.ReadFile(name)
+	f, err := os.Open(name)
 	if err != nil {
 		return 0
 	}
-	return len(liner.FindAllIndex(data, -1))
+	defer f.Close()
+	buf := make([]byte, 32*1024)
+	cnt := 0
+	lineSep := []byte{'\n'}
+	for {
+		c, err := f.Read(buf)
+		cnt += bytes.Count(buf[:c], lineSep)
+		if err != nil {
+			return cnt
+		}
+	}
 }
 
 func helpMsg() {
 	fmt.Fprintf(os.Stderr, "usage: %s <filename pattern>\n"+
-		"supports glob patterns\n",
+		"supports glob patterns\n"+
+		"if piped, reads from stdin instead (cat main.go | lncount)\n",
 		exeName)
 }
 
+func readStdin() {
+	scanner := bufio.NewScanner(os.Stdin)
+	cnt := 0
+	for scanner.Scan() {
+		cnt++
+		if scanner.Err() != nil {
+			fmt.Printf("%d lines\n", cnt)
+			return
+		}
+	}
+	fmt.Printf("%d lines\n", cnt)
+}
+
 func main() {
+	// check if stdin is piped
+	if fi, err := os.Stdin.Stat(); err == nil {
+		if (fi.Mode() & os.ModeCharDevice) == 0 {
+			readStdin()
+			return
+		}
+	}
 	help := flag.Bool("h", false, "display help")
 	help2 := flag.Bool("help", false, "display help")
 	flag.Parse()
