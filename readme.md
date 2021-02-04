@@ -26,3 +26,8 @@ You need the go compiler.
 	go get -u -v github.com/insomnimus/lncount
 
 This should install lncount to your $GOBIN directory, make sure $GOBIN is in your path.
+
+License
+-------
+
+MIT License.
