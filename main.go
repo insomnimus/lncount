@@ -7,18 +7,25 @@ import (
 	globber "github.com/mattn/go-zglob"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
-	"strings"
+
+	"github.com/insomnimus/lncount/engine"
 )
 
-var files []string
-var count int
 var (
+	excluder    = regexp.MustCompile(`^(\-e|\-\-exclude)=(.+)$`)
+	files       []string
+	count       int
 	exeName     string = "lncount"
 	filePattern string
+	exclude     string
 )
 
 func collectFiles() {
+	if exclude != "" {
+		defer filterFiles()
+	}
 	// assume bash is the default shell for all
 	// bash can expand the filenames itself so return
 	if runtime.GOOS != "windows" {
@@ -50,11 +57,16 @@ func countLines(name string) int {
 	}
 }
 
-func helpMsg() {
-	fmt.Fprintf(os.Stderr, "usage: %s <filename pattern>\n"+
-		"supports glob patterns\n"+
-		"if piped, reads from stdin instead (cat main.go | lncount)\n",
-		exeName)
+func showHelp() {
+	fmt.Fprintf(os.Stderr, `%s, counts lines
+	
+	usage: %s [options] <filenames>
+	
+	options are:
+	-e, --exclude=<pattern>: exclude files using basic regexp
+	-h, --help: show this message
+	`, exeName, exeName)
+	os.Exit(0)
 }
 
 func readStdin() {
@@ -70,6 +82,35 @@ func readStdin() {
 	fmt.Printf("%d lines\n", cnt)
 }
 
+func worker(jobs <-chan string, results chan<- int) {
+	for j := range jobs {
+		results <- countLines(j)
+	}
+}
+
+func filterFiles() {
+	if len(files) == 0 {
+		return
+	}
+	rex, err := engine.Compile(exclude, true)
+	if err != nil {
+		exit("%s", err)
+	}
+	var fs []string
+	for _, f := range files {
+		if rex.MatchString(filepath.Base(f)) {
+			continue
+		}
+		fs = append(fs, f)
+	}
+	files = fs
+}
+
+func exit(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(2)
+}
+
 func main() {
 	// check if stdin is piped
 	if fi, err := os.Stdin.Stat(); err == nil {
@@ -81,27 +122,43 @@ func main() {
 
 	exeName = filepath.Base(os.Args[0])
 	if len(os.Args) == 1 {
-		helpMsg()
-		return
+		showHelp()
+	}
+	args := os.Args[1:]
+
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch a[0] {
+		case '-':
+			switch a {
+			case "-h", "--help":
+				showHelp()
+			case "-e", "--exclude":
+				if i+1 >= len(args) {
+					exit("the --exclude flag is set but the value is missing")
+				}
+				exclude = args[i+1]
+				i++
+			default:
+				if matches := excluder.FindStringSubmatch(a); len(matches) == 3 {
+					exclude = matches[2]
+				} else {
+					exit("unknown command line option %q", a)
+				}
+			}
+		default:
+			if runtime.GOOS == "windows" {
+				if filePattern == "" {
+					filePattern = a
+				} else {
+					files = append(files, a)
+				}
+			} else {
+				files = append(files, a)
+			}
+		}
 	}
 
-LOOP:
-	for _, arg := range os.Args[1:] {
-		if arg == "-h" || arg == "--help" {
-			helpMsg()
-			return
-		}
-		switch runtime.GOOS {
-		case "windows":
-			if strings.Contains(arg, "*") {
-				filePattern = arg
-				continue LOOP
-			}
-			files = append(files, arg)
-		default:
-			files = append(files, arg)
-		}
-	}
 	collectFiles()
 	if len(files) == 0 {
 		fmt.Fprintf(os.Stderr, "no files found matching %s\n", filePattern)
@@ -130,10 +187,4 @@ LOOP:
 		msg += "s"
 	}
 	fmt.Println(msg)
-}
-
-func worker(jobs <-chan string, results chan<- int) {
-	for j := range jobs {
-		results <- countLines(j)
-	}
 }
