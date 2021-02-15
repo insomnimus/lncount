@@ -104,6 +104,7 @@ LOOP:
 		case 0:
 			break LOOP
 		case ']':
+			out.WriteRune(']')
 			break LOOP
 		case '\\':
 			c.read()
