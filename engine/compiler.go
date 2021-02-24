@@ -79,12 +79,17 @@ LOOP:
 				c.read()
 				out.WriteString(".*")
 			} else {
-				out.WriteString(".*?")
+				out.WriteString("[^/]*?")
 			}
 		case '[':
 			out.WriteString(c.readRange())
 		case '?':
-			out.WriteString(".?")
+			if c.peek() == '?' {
+				c.read()
+				out.WriteString(".?")
+			} else {
+				out.WriteString("[^/]?")
+			}
 		case '-', ',', '.', '{', '(', ')', '}', ']', ':':
 			out.WriteByte('\\')
 			out.WriteByte(c.ch)

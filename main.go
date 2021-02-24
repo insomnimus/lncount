@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/insomnimus/lncount/engine"
 )
@@ -58,14 +59,23 @@ func countLines(name string) int {
 }
 
 func showHelp() {
+	if runtime.GOOS == "windows" {
+		if strings.HasSuffix(exeName, ".exe") {
+			exeName = exeName[:len(exeName)-4]
+		}
+	}
 	fmt.Fprintf(os.Stderr, `%s, counts lines
 	
-	usage: %s [options] <filenames>
+	usage: %s <files> [options]
 	
 	options are:
-	-e, --exclude=<pattern>: exclude files using basic regexp
+	-e, --exclude <pattern>: exclude files using basic regexp
 	-h, --help: show this message
-	`, exeName, exeName)
+`, exeName, exeName)
+	if runtime.GOOS != "windows" {
+		fmt.Fprintln(os.Stderr, "note: the --exclude flags value should be quoted if your shell automatically expands glob patterns.\n"+
+			"in contrast, when specifying files, do not quote the glob pattern, let the shell handle that one.")
+	}
 	os.Exit(0)
 }
 
@@ -98,7 +108,7 @@ func filterFiles() {
 	}
 	var fs []string
 	for _, f := range files {
-		if rex.MatchString(filepath.Base(f)) {
+		if rex.MatchString(f) {
 			continue
 		}
 		fs = append(fs, f)
