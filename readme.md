@@ -1,25 +1,22 @@
-lncount
---------
+# lncount
 
 Simple and fast tool to count how many lines your files have.
 
-Features
--------
+## Features
 
 -	Supports glob patterns.
 -	Reads from stdin when piped.
 -	Concurrent and fast.
 
-Some Examples
--------
+## Some Examples
 
 	lncount **/*.go #read all .go files under the current directory
 	cat main.go | lncount #reads from stdin
 	lncount main.go # reads just main.go
 	lncount **/main.go # only count main.go files
+	lncount **/*.go --exclude '**/*_test.go' # ignore test files
 
-Installation
---------
+## Installation
 
 You need the go compiler.
 
@@ -27,7 +24,6 @@ You need the go compiler.
 
 This should install lncount to your $GOBIN directory, make sure $GOBIN is in your path.
 
-License
--------
+### License
 
 MIT License.
